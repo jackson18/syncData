@@ -1,0 +1,15 @@
+<!DOCTYPE hibernate-mapping PUBLIC 
+    "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+    "http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+	<class name="com.qijiabin.hibernate.entity.MwsFollow" table="mws_follow">
+		<id name="id"></id>
+		<property name="stationId" column="station_id"></property>
+		<property name="snsId" column="sns_id"></property>
+		<property name="nickName" column="nick_name"></property>
+		<property name="faceUrl" column="face_url"></property>
+		<property name="accessPurview" column="access_purview"></property>
+		<property name="createSeconds" column="create_milliseconds"></property>
+		<property name="createDate" column="create_date"></property>
+	</class>
+</hibernate-mapping>
