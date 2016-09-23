@@ -11,7 +11,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.commons.pool2.PooledObjectFactory;
+import org.apache.commons.pool2.impl.GenericObjectPool;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+
 import com.qijiabin.jdbc.dao.BaseDao;
+import com.qijiabin.jdbc.dao.ConnectionFactory;
 
 /**
  * ========================================================
@@ -30,29 +35,58 @@ public class Test {
 	private static final String sqlOld = "select * from mws_follow";
 	private static final String sqlNew = "insert into mws_follow(id, station_id, sns_id, nick_name, face_url, access_purview, create_milliseconds, create_date) values(?,?,?,?,?,?,?,?)";
 	
+	public static final String URL = "jdbc:mysql://localhost:3306/my2?useUnicoded=true&characterEncoding=utf-8";
+	public static final String USERNAME = "root";
+	public static final String PASSWORD = "root";
+	public static final String URL2 = "jdbc:mysql://localhost:3306/my?useUnicoded=true&characterEncoding=utf-8";
+	public static final String USERNAME2 = "root";
+	public static final String PASSWORD2 = "root";
+	
 	private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-	private static final BaseDao MWS_FOLLOW_DAO = new BaseDao(); 
-	private static final BaseDao MWS_FOLLOW_DAO2 = new BaseDao();
 	private static final ExecutorService SERVICE = Executors.newFixedThreadPool(30);
+	private static GenericObjectPool<BaseDao> pool;
+	private static GenericObjectPool<BaseDao> pool2;
+	
+	public Test() {
+		// 创建池对象工厂
+		PooledObjectFactory<BaseDao> factory = new ConnectionFactory(USERNAME, PASSWORD, URL);
+		PooledObjectFactory<BaseDao> factory2 = new ConnectionFactory(USERNAME2, PASSWORD2, URL2);
+		GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
+		poolConfig.setMaxIdle(5);
+		poolConfig.setMinIdle(1);
+		poolConfig.setMaxTotal(35);
+		
+		// 创建对象池
+		pool = new GenericObjectPool<BaseDao>(factory, poolConfig);  
+		pool2 = new GenericObjectPool<BaseDao>(factory2, poolConfig);  
+	}
+	
 	
 	private void start() {
-		ResultSet rs = MWS_FOLLOW_DAO.execQuery(countSql, null);
 		try {
-			int line = 0;
-			while (rs.next()) {
-				line = rs.getInt(1);
+			BaseDao baseDao = pool2.borrowObject();
+			ResultSet rs = baseDao.execQuery(countSql, null);
+			try {
+				int line = 0;
+				while (rs.next()) {
+					line = rs.getInt(1);
+				}
+				
+				if (line < num) {
+					work(sqlOld);
+				} else {
+					int trade = line / num;
+					for (int i = 0; i <= trade; i++) {
+						String sql = sqlOld + " limit " + i*num +"," + num;
+						work(sql);
+					}
+				}
+			} catch (SQLException e) {
+				e.printStackTrace();
 			}
 			
-			if (line < num) {
-				work(sqlOld);
-			} else {
-				int trade = line / num;
-				for (int i = 0; i <= trade; i++) {
-					String sql = sqlOld + " limit " + i*num +"," + num;
-					work(sql);
-				}
-			}
-		} catch (SQLException e) {
+			pool2.returnObject(baseDao);
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		System.out.println("station_followed表，一共成功插入 " + count.get() + " 条数据");
@@ -60,8 +94,10 @@ public class Test {
 	
 	private void work(String querySql) {
 		System.out.println("执行sql: " + querySql);
-		ResultSet rs = MWS_FOLLOW_DAO.execQuery(querySql, null);
 		try {
+			BaseDao baseDao = pool2.borrowObject();
+			ResultSet rs = baseDao.execQuery(querySql, null);
+			
 			while(rs.next()){
 				long id = rs.getLong("id");
 				long station_id = rs.getLong("station_id");
@@ -77,13 +113,17 @@ public class Test {
 				
 				// 插入
 				String[] params = {id+"", station_id+"", sns_id+"", nick_name, face_url, access_purview+"", create_milliseconds+"", createTime};
-				Future<Integer> result = SERVICE.submit(new MyThread(sqlNew, params, MWS_FOLLOW_DAO2));
+				Future<Integer> result = SERVICE.submit(new MyThread(sqlNew, params));
 				if (result.get() == 1) {
 					count.incrementAndGet();
 					System.out.println("插入成功。。。");
 				}
 			}
+			
+			pool2.returnObject(baseDao);
 		} catch (SQLException | InterruptedException | ExecutionException e) {
+			e.printStackTrace();
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
@@ -92,17 +132,17 @@ public class Test {
 		
 		private String sql;
 		private String[] params;
-		private BaseDao baseDao;
 		
-		public MyThread(String sql, String[] params, BaseDao baseDao) {
+		public MyThread(String sql, String[] params) {
 			this.sql = sql;
 			this.params = params;
-			this.baseDao = baseDao;
 		}
 
 		@Override
 		public Integer call() throws Exception {
+			BaseDao baseDao = pool.borrowObject();
 			int result = baseDao.execUpdate(sql, params);
+			pool.returnObject(baseDao);
 			return result;
 		}
 		
@@ -112,7 +152,8 @@ public class Test {
 		long start = System.currentTimeMillis();
 		new Test().start();
 		long end = System.currentTimeMillis();
-		System.out.println("一共耗时： " + (end - start)/1000 + " 秒");
+		System.out.println("一共耗时： " + (end - start)/1000 + " 秒");//一共耗时： 1141 秒
 	}
 	
 }
+

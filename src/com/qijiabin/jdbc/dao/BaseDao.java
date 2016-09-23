@@ -9,16 +9,18 @@ import java.sql.SQLException;
 public class BaseDao {
 	
 	public static final String Driver = "com.mysql.jdbc.Driver";
-	public static final String URL = "jdbc:mysql://localhost:3306/my2?useUnicoded=true&characterEncoding=utf-8";
-	public static final String USERNAME = "root";
-	public static final String PASSWORD = "root";
-	public static final String URL2 = "jdbc:mysql://localhost:3306/my?useUnicoded=true&characterEncoding=utf-8";
-	public static final String USERNAME2 = "root";
-	public static final String PASSWORD2 = "root";
-	
+	private String username;
+	private String password;
+	private String url;
 	private Connection conn;
 	private PreparedStatement ps;
 	public ResultSet rs;
+	
+	public BaseDao(String username, String password, String url) {
+		this.username = username;
+		this.password = password;
+		this.url = url;
+	}
 	
 	public void getConn(String url, String username, String password){
 		try {
@@ -32,7 +34,7 @@ public class BaseDao {
 	}
 	
 	public ResultSet execQuery(String sql,String[] params){
-		getConn(URL2, USERNAME2, PASSWORD2);
+		getConn(url, username, password);
 		try {
 			ps = conn.prepareStatement(sql);
 			if(params!=null&&params.length>0){
@@ -49,7 +51,7 @@ public class BaseDao {
 	
 	public int execUpdate(String sql,String[] params){
 		int count = 0;
-		getConn(URL, USERNAME, PASSWORD);
+		getConn(url, username, password);
 		try {
 			ps = conn.prepareStatement(sql);
 			if(params!=null&&params.length>0){
